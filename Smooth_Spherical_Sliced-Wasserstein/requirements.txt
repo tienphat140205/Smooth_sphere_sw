@@ -1,0 +1,34 @@
+# Deep learning
+torch
+torchvision
+
+# Numerical / scientific
+numpy
+scipy
+pandas
+
+# Optimal Transport
+POT
+
+# Spherical geometry & mesh processing
+trimesh
+
+# Geospatial
+geopandas
+plotly
+
+# Wasserstein / OT losses (SWAE)
+geomloss
+
+# Image
+Pillow
+
+# ML utilities
+scikit-learn
+
+# Visualization
+matplotlib
+seaborn
+
+# Progress bar
+tqdm
