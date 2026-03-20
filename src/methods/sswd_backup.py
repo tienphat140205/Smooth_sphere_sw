@@ -1,18 +1,10 @@
 import torch
-
-import numpy as np
 import torch.nn.functional as F
 
-try:
-    from ..utils.misc import rand_t_marginal
-    from ..utils.power_spherical import PowerSpherical
-    from ..utils.vmf import sample_vmf_batch
-except ImportError:
-    from utils.misc import rand_t_marginal
-    from utils.power_spherical import PowerSpherical
-    from utils.vmf import sample_vmf_batch
+import numpy as np
 
 
+#Source: https://github.com/clbonet/Spherical_Sliced-Wasserstein/blob/main/lib/sw_sphere.py
 
 def roll_by_gather(mat,dim, shifts: torch.LongTensor):
     ## https://stackoverflow.com/questions/66596699/how-to-shift-columns-or-rows-in-a-tensor-with-different-offsets-in-pytorch
@@ -269,6 +261,11 @@ def sliced_cost(Xs, Xt, Us, p=2, u_weights=None, v_weights=None):
         p: float
             Power
     """
+    device = Us.device
+    
+    Xs = Xs.to(device)
+    Xt = Xt.to(device)
+    
     n_projs, d, k = Us.shape
     n, _ = Xs.shape
     m, _ = Xt.shape    
@@ -295,7 +292,7 @@ def sliced_cost(Xs, Xt, Us, p=2, u_weights=None, v_weights=None):
     return torch.mean(w1)
     
 
-def sliced_wasserstein_sphere(Xs, Xt, num_projections, device, u_weights=None, v_weights=None, p=2):
+def sswd(Xs, Xt, num_projections, device, u_weights=None, v_weights=None, p=2):
     """
         Compute the sliced-Wasserstein distance on the sphere.
 
@@ -376,7 +373,7 @@ def w2_unif_circle(u_values):
     return cpt1 - x_mean**2 +cpt2 + 1/12
 
 
-def sliced_wasserstein_sphere_unif(Xs, num_projections, device):
+def sswd_unif(Xs, num_projections, device):
     """
         Compute the SSW2 on the sphere w.r.t. a uniform distribution.
 
@@ -402,90 +399,3 @@ def sliced_wasserstein_sphere_unif(Xs, num_projections, device):
     Xps = (torch.atan2(-Xps[:,:,1], -Xps[:,:,0])+np.pi)/(2*np.pi)
         
     return torch.mean(w2_unif_circle(Xps))
-
-
-# ---------------------------------------------------------------------------
-# Global Smoothed Spherical Sliced-Wasserstein (GSSSW)
-# Definition: GSSSW_{p,kappa}(mu, nu) = SSW_p(mu * K_kappa, nu * K_kappa)
-# Empirical approximation: sample x ~ mu, then x' ~ K(x, kappa)
-# ---------------------------------------------------------------------------
-
-
-def sample_ps_batch(x, kappa):
-    """
-    Sample x' ~ PowerSpherical(x_i, kappa) for each x_i in a batch.
-    Uses PowerSpherical.rsample() which supports pathwise (reparameterised)
-    gradients through x.
-
-    Parameters:
-    x     : Tensor, shape (n, d) — batch of unit vectors on S^{d-1}
-    kappa : float — concentration parameter
-
-    Returns:
-    Tensor, shape (n, d) — smoothed samples on S^{d-1}
-    """
-    scale = torch.full((x.shape[0],), float(kappa), dtype=x.dtype, device=x.device)
-    ps = PowerSpherical(x, scale)
-    return ps.rsample()
-
-
-def gsssw(Xs, Xt, num_projections, device, kappa, p=2, kernel='vmf'):
-    """
-    Compute the Global Smoothed Spherical Sliced-Wasserstein distance between
-    two empirical distributions on S^{d-1}.
-
-    GSSSW_{p,kappa}(mu, nu) = SSW_p(mu * K_kappa, nu * K_kappa)
-
-    Parameters:
-    Xs            : Tensor, shape (n, d) — samples from source distribution mu
-    Xt            : Tensor, shape (m, d) — samples from target distribution nu
-    num_projections: int   — number of random projections
-    device        : str
-    kappa         : float  — smoothing concentration (kappa -> inf recovers SSW)
-    p             : float  — power of the Wasserstein distance (>= 1)
-    kernel        : str    — 'vmf' (von Mises-Fisher) or 'ps' (Power Spherical)
-
-    Returns:
-    Scalar Tensor — GSSSW_{p,kappa}(mu, nu)
-    """
-    if kernel == 'vmf':
-        sample_fn = sample_vmf_batch
-    elif kernel == 'ps':
-        sample_fn = sample_ps_batch
-    else:
-        raise ValueError(f"Unsupported kernel '{kernel}'. Expected 'vmf' or 'ps'.")
-
-    Xs_smooth = sample_fn(Xs, kappa)
-    Xt_smooth = sample_fn(Xt, kappa)
-    sw_cost = sliced_wasserstein_sphere(Xs_smooth, Xt_smooth, num_projections, device, p=p)
-    return sw_cost if p == 1 else sw_cost.pow(1.0 / p)
-
-
-def gsssw_unif(Xs, num_projections, device, kappa, kernel='vmf'):
-    """
-    Compute the Global Smoothed Spherical Sliced-Wasserstein between an empirical
-    distribution on S^{d-1} and the uniform distribution.
-
-    Because Uniform * K_kappa = Uniform for any rotation-invariant kernel K,
-    only Xs is smoothed.
-
-    Parameters:
-    Xs            : Tensor, shape (n, d) — samples from source distribution mu
-    num_projections: int   — number of random projections
-    device        : str
-    kappa         : float  — smoothing concentration
-    kernel        : str    — 'vmf' or 'ps' (Power Spherical)
-
-    Returns:
-    Scalar Tensor — GSSSW_{2,kappa}(mu, Uniform(S^{d-1}))
-    """
-    if kernel == 'vmf':
-        sample_fn = sample_vmf_batch
-    elif kernel == 'ps':
-        sample_fn = sample_ps_batch
-    else:
-        raise ValueError(f"Unsupported kernel '{kernel}'. Expected 'vmf' or 'ps'.")
-
-    Xs_smooth = sample_fn(Xs, kappa)
-    sw_cost = sliced_wasserstein_sphere_unif(Xs_smooth, num_projections, device)
-    return torch.sqrt(sw_cost)

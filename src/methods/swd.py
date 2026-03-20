@@ -1,5 +1,9 @@
 import torch
-from utils.misc import generate_rand_projs, generate_equator_projs
+from utils.misc import generate_rand_projs
+try:
+    from utils.misc import generate_equator_projs
+except ImportError:
+    generate_equator_projs = None
 
 def swd(X, Y, p, n_projs=200, device='cpu'):
     projs = generate_rand_projs(X.shape[-1], n_projs).to(device)

@@ -19,14 +19,17 @@ from datasets import EarthDataHandler, xyz_to_latlon
 sys.path.append("../..")
 from utils.misc import *
 from utils.nf.exp_map import create_NF
-from methods import sswd, s3wd, swd, wd, gsssw
+from methods import sswd, s3wd, swd, wd
+from methods.sswd import gsssw, gsssw_unif, sliced_wasserstein_sphere_unif, sliced_wasserstein_sphere, psssw_unif
+from methods.swd import swd as sliced_wasserstein
+from methods.s3wd import s3wd_unif, ri_s3wd_unif, ari_s3wd_unif, gss3wd_unif, gsssw_ri_s3wd_unif, gsssw_ari_s3wd_unif
 from utils.vmf import rand_vmf
 
 """
 Adapted from Bonet et al. 2023 (https://github.com/clbonet/spherical_sliced-wasserstein)
 """
 
-device = "cuda:0" if torch.cuda.is_available() else "cpu"
+
 
 
 # Argument parser
@@ -41,9 +44,13 @@ parser.add_argument("--lr", type=float, default=1e-1, help="Learning Rate")
 parser.add_argument("--n_blocks", type=int, default=48, help="Number of blocks in the NF")
 parser.add_argument("--n_components", type=int, default=100, help="Number of components in the NF")
 parser.add_argument("--n_try", type=int, default=5, help="Number of iterations")
-parser.add_argument("--kappa", type=float, default=10.0, help="Smoothing concentration for GSSSW")
+parser.add_argument("--kappa", type=float, default=500.0, help="Smoothing concentration for GSSSW")
 parser.add_argument("--kernel", type=str, default="vmf", choices=["vmf", "ps"], help="Smoothing kernel for GSSSW")
+parser.add_argument("--gpu", type=int, default=1, help="GPU index to use")
+parser.add_argument("--log_interval", type=int, default=50, help="Print test NLL every N epochs")
 args = parser.parse_args()
+
+device = f"cuda:{args.gpu}" if torch.cuda.is_available() else "cpu"
 
 # Dataset split
 config = {
@@ -63,6 +70,7 @@ def log_likelihood(h, log_det):
     return (prior+log_det)
 
 if __name__ == "__main__":
+    eps = None  # Not used by EarthDataHandler but required by parent class signature
     n_steps = args.n_epochs
     num_projections = args.n_projs
     L_density = np.zeros((args.n_try))
@@ -84,7 +92,7 @@ if __name__ == "__main__":
         for test_data, _ in val_loader:
             break
 
-        model = create_NF(3, args.n_blocks, args.n_components).to(device)
+        model = create_NF(3, args.n_blocks, args.n_components, device=device).to(device)
         n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
         print('Number of parameters: ',n_params)
         optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
@@ -143,7 +151,15 @@ if __name__ == "__main__":
                     kl = loss_kl(x[-1], log_det)
                     loss = kl + 10 * ssw
                 elif args.loss == "gsssw":
-                    loss = gsssw.gsssw_unif(x[-1], num_projections, device, kappa=args.kappa, kernel=args.kernel)
+                    loss = gsssw_unif(x[-1], num_projections, device, kappa=args.kappa, kernel=args.kernel)
+                elif args.loss == "gss3wd":
+                    loss = gss3wd_unif(x[-1], kappa=args.kappa, p=2, n_projs=num_projections, device=device, kernel=args.kernel)
+                elif args.loss == "gsssw_ri_s3wd":
+                    loss = gsssw_ri_s3wd_unif(x[-1], kappa=args.kappa, p=2, n_projs=num_projections, n_rotations=1, device=device, kernel=args.kernel)
+                elif args.loss == "gsssw_ari_s3wd":
+                    loss = gsssw_ari_s3wd_unif(x[-1], kappa=args.kappa, p=2, n_projs=num_projections, n_rotations=1, pool_size=100, device=device, kernel=args.kernel)
+                elif args.loss == "psssw":
+                    loss = psssw_unif(x[-1], num_projections, device, kappa=args.kappa)
                 
                 
                 loss.backward()
@@ -155,6 +171,9 @@ if __name__ == "__main__":
                 z, log_det = model(test_data.to(device))
                 density = log_likelihood(z[-1], log_det).detach().cpu()
                 test_nll.append(-density.mean())
+
+            if k % args.log_interval == 0 or k == n_steps - 1:
+                print(f"Epoch {k}/{n_steps} | loss = {loss.item():.4f} | test NLL = {-density.mean():.4f}", flush=True)
 
 
         #     scheduler.step(loss)

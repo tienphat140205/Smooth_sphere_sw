@@ -58,12 +58,13 @@ class ExpMap(BaseNF):
     def backward(self, z):
         pass
     
-def create_NF(d=3, n_blocks=6, n_components=5):
+def create_NF(d=3, n_blocks=6, n_components=5, device='cpu'):
+    from utils.nf.normalizing_flows import NormalizingFlows
     flows = []
     for k in range(n_blocks):
         radialBlock = ExpMap(d, n_components)
         flows.append(radialBlock)
 
-    model = BaseNF(flows).to(device)
+    model = NormalizingFlows(flows, device=device)
     return model
     

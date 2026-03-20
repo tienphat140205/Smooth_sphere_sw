@@ -6,8 +6,6 @@ import os
 import time
 import matplotlib.pyplot as plt
 import pandas as pd
-import trimesh
-import igl
 import scipy
 from PIL import Image
 import plotly.offline as offline
