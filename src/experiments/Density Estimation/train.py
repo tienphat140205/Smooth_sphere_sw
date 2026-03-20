@@ -22,7 +22,11 @@ from utils.nf.exp_map import create_NF
 from methods import sswd, s3wd, swd, wd
 from methods.sswd import gsssw, gsssw_unif, sliced_wasserstein_sphere_unif, sliced_wasserstein_sphere, psssw_unif
 from methods.swd import swd as sliced_wasserstein
-from methods.s3wd import s3wd_unif, ri_s3wd_unif, ari_s3wd_unif, gss3wd_unif, gsssw_ri_s3wd_unif, gsssw_ari_s3wd_unif
+from methods.s3wd import (
+    s3wd_unif, ri_s3wd_unif, ari_s3wd_unif, 
+    gs_s3wd_unif, gs_ri_s3wd_unif, gs_ari_s3wd_unif,
+    ps_s3wd_unif, ps_ri_s3wd_unif, ps_ari_s3wd_unif
+)
 from utils.vmf import rand_vmf
 
 """
@@ -152,14 +156,20 @@ if __name__ == "__main__":
                     loss = kl + 10 * ssw
                 elif args.loss == "gsssw":
                     loss = gsssw_unif(x[-1], num_projections, device, kappa=args.kappa, kernel=args.kernel)
-                elif args.loss == "gss3wd":
-                    loss = gss3wd_unif(x[-1], kappa=args.kappa, p=2, n_projs=num_projections, device=device, kernel=args.kernel)
-                elif args.loss == "gsssw_ri_s3wd":
-                    loss = gsssw_ri_s3wd_unif(x[-1], kappa=args.kappa, p=2, n_projs=num_projections, n_rotations=1, device=device, kernel=args.kernel)
-                elif args.loss == "gsssw_ari_s3wd":
-                    loss = gsssw_ari_s3wd_unif(x[-1], kappa=args.kappa, p=2, n_projs=num_projections, n_rotations=1, pool_size=100, device=device, kernel=args.kernel)
+                elif args.loss == "gss3wd" or args.loss == "gs_s3wd":
+                    loss = gs_s3wd_unif(x[-1], kappa=args.kappa, p=2, n_projs=num_projections, device=device, kernel=args.kernel)
+                elif args.loss == "gsssw_ri_s3wd" or args.loss == "gs_ri_s3wd":
+                    loss = gs_ri_s3wd_unif(x[-1], kappa=args.kappa, p=2, n_projs=num_projections, n_rotations=1, device=device, kernel=args.kernel)
+                elif args.loss == "gsssw_ari_s3wd" or args.loss == "gs_ari_s3wd":
+                    loss = gs_ari_s3wd_unif(x[-1], kappa=args.kappa, p=2, n_projs=num_projections, n_rotations=1, pool_size=100, device=device, kernel=args.kernel)
                 elif args.loss == "psssw":
                     loss = psssw_unif(x[-1], num_projections, device, kappa=args.kappa)
+                elif args.loss == "ps_s3wd":
+                    loss = ps_s3wd_unif(x[-1], kappa=args.kappa, p=2, n_projs=num_projections, device=device)
+                elif args.loss == "ps_ri_s3wd":
+                    loss = ps_ri_s3wd_unif(x[-1], kappa=args.kappa, p=2, n_projs=num_projections, n_rotations=1, device=device)
+                elif args.loss == "ps_ari_s3wd":
+                    loss = ps_ari_s3wd_unif(x[-1], kappa=args.kappa, p=2, n_projs=num_projections, n_rotations=1, pool_size=100, device=device)
                 
                 
                 loss.backward()
